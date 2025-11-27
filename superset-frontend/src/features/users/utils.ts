@@ -43,6 +43,62 @@ export const deleteUser = async (userId: number) =>
     endpoint: `/api/v1/security/users/${userId}`,
   });
 
+export const getUserAssets = async (userId: number) => {
+  const params = JSON.stringify({
+    filters: [{ col: 'owners', opr: 'rel_m_m', value: userId }],
+  });
+
+  const [dashboards, charts, datasets] = await Promise.all([
+    SupersetClient.get({
+      endpoint: `/api/v1/dashboard/?q=${params}`,
+    }),
+    SupersetClient.get({
+      endpoint: `/api/v1/chart/?q=${params}`,
+    }),
+    SupersetClient.get({
+      endpoint: `/api/v1/dataset/?q=${params}`,
+    }),
+  ]);
+
+  return {
+    dashboards: dashboards.json?.result || [],
+    charts: charts.json?.result || [],
+    datasets: datasets.json?.result || [],
+  };
+};
+
+export const reassignUserAssets = async (
+  userId: number,
+  newOwnerId: number,
+  assetType: 'dashboard' | 'chart' | 'dataset',
+  assets: Array<{ id: number; owners?: Array<{ id: number }> }>,
+) => {
+  const promises = assets.map(asset => {
+    const currentOwners = asset.owners || [];
+    const ownerIds = currentOwners.map(owner => owner.id);
+
+    // Remove old owner and add new owner
+    const updatedOwnerIds = ownerIds.filter(id => id !== userId);
+    if (!updatedOwnerIds.includes(newOwnerId)) {
+      updatedOwnerIds.push(newOwnerId);
+    }
+
+    const endpoint =
+      assetType === 'dashboard'
+        ? `/api/v1/dashboard/${asset.id}`
+        : assetType === 'chart'
+          ? `/api/v1/chart/${asset.id}`
+          : `/api/v1/dataset/${asset.id}`;
+
+    return SupersetClient.put({
+      endpoint,
+      jsonPayload: { owners: updatedOwnerIds },
+    });
+  });
+
+  return Promise.all(promises);
+};
+
 export const atLeastOneRoleOrGroup =
   (fieldToCheck: 'roles' | 'groups') =>
   ({

@@ -23,6 +23,7 @@ import { useToasts } from 'src/components/MessageToasts/withToasts';
 import {
   Checkbox,
   FormModal,
+  Modal,
   Select,
   Input,
   FormItem,
@@ -304,25 +305,13 @@ export function UserReassignmentModal({
   };
 
   return (
-    <FormModal
-      title={t('Reassign Assets')}
-      onHide={onCancel}
+    <Modal
       show
-      modalFooterButtons={[
-        {
-          className: 'btn btn-default',
-          key: 'cancel',
-          name: t('Cancel'),
-          onClick: onCancel,
-        },
-        {
-          className: 'btn btn-primary',
-          key: 'submit',
-          name: t('Reassign'),
-          onClick: handleSubmit,
-          disabled: !selectedUserId,
-        },
-      ]}
+      onHide={onCancel}
+      title={t('Reassign Assets')}
+      onHandledPrimaryAction={handleSubmit}
+      primaryButtonName={t('Reassign')}
+      primaryButtonStyle="danger"
       disablePrimaryButton={!selectedUserId}
     >
       <FormItem>
@@ -342,7 +331,7 @@ export function UserReassignmentModal({
           }))}
         />
       </FormItem>
-    </FormModal>
+    </Modal>
   );
 }
 

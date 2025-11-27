@@ -41,7 +41,11 @@ import {
   UserReassignmentModal,
 } from 'src/features/users/UserListModal';
 import { useToasts } from 'src/components/MessageToasts/withToasts';
-import { deleteUser } from 'src/features/users/utils';
+import {
+  deleteUser,
+  getUserAssets,
+  reassignUserAssets,
+} from 'src/features/users/utils';
 import { fetchPaginatedData } from 'src/utils/fetchOptions';
 import type { UsersListProps, Group, Role, UserObject } from './types';
 
@@ -155,16 +159,87 @@ function UsersList({ user }: UsersListProps) {
 
   const handleUserDelete = async ({ id, username }: UserObject) => {
     try {
+      // Option to reassign assets before deletetion
+      setReassignmentModalState({
+        open: true,
+        userToDelete: { id, username } as UserObject,
+      });
       await deleteUser(id);
       refreshData();
       setUserCurrentlyDeleting(null);
       addSuccessToast(t('Deleted user: %s', username));
     } catch (error) {
-      // Show reassignment modal on error (likely due to owned assets)
-      setReassignmentModalState({
-        open: true,
-        userToDelete: { id, username } as UserObject,
-      });
+      addDangerToast(t('There was an issue deleting %s', username));
+    }
+  };
+
+  const handleReassignAssets = async (newOwnerId: number) => {
+    if (!reassignmentModalState.userToDelete) return;
+    const userToDelete = reassignmentModalState.userToDelete;
+    try {
+      // Get all assets owned by the user
+      const assets = await getUserAssets(userToDelete.id);
+      console.log('fetched assets for user', userToDelete.id, assets);
+      // Reassign all asset types (run and log each result)
+      const reassignPromises: Array<Promise<any>> = [];
+      if (assets.dashboards.length > 0) {
+        reassignPromises.push(
+          reassignUserAssets(
+            userToDelete.id,
+            newOwnerId,
+            'dashboard',
+            assets.dashboards,
+          ),
+        );
+      }
+      if (assets.charts.length > 0) {
+        reassignPromises.push(
+          reassignUserAssets(
+            userToDelete.id,
+            newOwnerId,
+            'chart',
+            assets.charts,
+          ),
+        );
+      }
+      if (assets.datasets.length > 0) {
+        reassignPromises.push(
+          reassignUserAssets(
+            userToDelete.id,
+            newOwnerId,
+            'dataset',
+            assets.datasets,
+          ),
+        );
+      }
+
+      if (reassignPromises.length > 0) {
+        const results = await Promise.allSettled(reassignPromises);
+        const rejected = results.filter(r => r.status === 'rejected');
+        if (rejected.length > 0) {
+          console.error('Some reassign operations failed', rejected);
+          // surface an error to the user but continue to attempt delete below
+          addDangerToast(
+            t(
+              'One or more reassign operations failed for %s — check console for details',
+              userToDelete.username,
+            ),
+          );
+        }
+      } else {
+        console.log('no assets to reassign for user', userToDelete.id);
+      }
+
+      refreshData();
+      setReassignmentModalState({ open: false, userToDelete: null });
+      setUserCurrentlyDeleting(null);
+      addSuccessToast(
+        t('Assets reassigned and user deleted: %s', userToDelete.username),
+      );
+    } catch (reassignmentError) {
+      addDangerToast(
+        t('Error reassigning assets for %s', userToDelete.username),
+      );
     }
   };
 
@@ -579,10 +654,7 @@ function UsersList({ user }: UsersListProps) {
           availableUsers={users.filter(
             u => u.id !== reassignmentModalState.userToDelete?.id,
           )}
-          onConfirm={(newOwnerId: number) => {
-            console.log('Reassign assets from', reassignmentModalState.userToDelete?.id, 'to', newOwnerId);
-            setReassignmentModalState({ open: false, userToDelete: null });
-          }}
+          onConfirm={handleReassignAssets}
           onCancel={() =>
             setReassignmentModalState({ open: false, userToDelete: null })
           }
