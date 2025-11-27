@@ -38,6 +38,7 @@ import { isUserAdmin } from 'src/dashboard/util/permissionUtils';
 import {
   UserListAddModal,
   UserListEditModal,
+  UserReassignmentModal,
 } from 'src/features/users/UserListModal';
 import { useToasts } from 'src/components/MessageToasts/withToasts';
 import { deleteUser } from 'src/features/users/utils';
@@ -91,6 +92,10 @@ function UsersList({ user }: UsersListProps) {
   const [currentUser, setCurrentUser] = useState<UserObject | null>(null);
   const [userCurrentlyDeleting, setUserCurrentlyDeleting] =
     useState<UserObject | null>(null);
+  const [reassignmentModalState, setReassignmentModalState] = useState({
+    open: false,
+    userToDelete: null as UserObject | null,
+  });
   const [loadingState, setLoadingState] = useState({
     roles: true,
     groups: true,
@@ -155,7 +160,11 @@ function UsersList({ user }: UsersListProps) {
       setUserCurrentlyDeleting(null);
       addSuccessToast(t('Deleted user: %s', username));
     } catch (error) {
-      addDangerToast(t('There was an issue deleting %s', username));
+      // Show reassignment modal on error (likely due to owned assets)
+      setReassignmentModalState({
+        open: true,
+        userToDelete: { id, username } as UserObject,
+      });
     }
   };
 
@@ -562,6 +571,21 @@ function UsersList({ user }: UsersListProps) {
           onHide={() => setUserCurrentlyDeleting(null)}
           open
           title={t('Delete User?')}
+        />
+      )}
+      {reassignmentModalState.open && reassignmentModalState.userToDelete && (
+        <UserReassignmentModal
+          userToDelete={reassignmentModalState.userToDelete}
+          availableUsers={users.filter(
+            u => u.id !== reassignmentModalState.userToDelete?.id,
+          )}
+          onConfirm={(newOwnerId: number) => {
+            console.log('Reassign assets from', reassignmentModalState.userToDelete?.id, 'to', newOwnerId);
+            setReassignmentModalState({ open: false, userToDelete: null });
+          }}
+          onCancel={() =>
+            setReassignmentModalState({ open: false, userToDelete: null })
+          }
         />
       )}
       <ConfirmStatusChange

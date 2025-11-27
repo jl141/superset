@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import { useState } from 'react';
 import { t } from '@superset-ui/core';
 import { ModalTitleWithIcon } from 'src/components/ModalTitleWithIcon';
 import { useToasts } from 'src/components/MessageToasts/withToasts';
@@ -280,5 +281,69 @@ export const UserListAddModal = (
 export const UserListEditModal = (
   props: Omit<UserModalProps, 'isEditMode'> & { user: UserObject },
 ) => <UserListModal {...props} isEditMode />;
+
+export interface UserReassignmentModalProps {
+  userToDelete: UserObject;
+  availableUsers: UserObject[];
+  onConfirm: (newOwnerId: number) => void;
+  onCancel: () => void;
+}
+
+export function UserReassignmentModal({
+  userToDelete,
+  availableUsers,
+  onConfirm,
+  onCancel,
+}: UserReassignmentModalProps) {
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+
+  const handleSubmit = () => {
+    if (selectedUserId) {
+      onConfirm(selectedUserId);
+    }
+  };
+
+  return (
+    <FormModal
+      title={t('Reassign Assets')}
+      onHide={onCancel}
+      show
+      modalFooterButtons={[
+        {
+          className: 'btn btn-default',
+          key: 'cancel',
+          name: t('Cancel'),
+          onClick: onCancel,
+        },
+        {
+          className: 'btn btn-primary',
+          key: 'submit',
+          name: t('Reassign'),
+          onClick: handleSubmit,
+          disabled: !selectedUserId,
+        },
+      ]}
+      disablePrimaryButton={!selectedUserId}
+    >
+      <FormItem>
+        <div style={{ marginBottom: '16px' }}>
+          {t(
+            'User "%s" owns dashboards, charts, or datasets. Select a user to reassign these assets to:',
+            userToDelete.username,
+          )}
+        </div>
+        <Select
+          placeholder={t('Select a user')}
+          value={selectedUserId}
+          onChange={(value: number) => setSelectedUserId(value)}
+          options={availableUsers.map(user => ({
+            label: `${user.first_name} ${user.last_name} (@${user.username})`,
+            value: user.id,
+          }))}
+        />
+      </FormItem>
+    </FormModal>
+  );
+}
 
 export default UserListModal;
