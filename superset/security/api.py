@@ -34,6 +34,7 @@ from superset.commands.dashboard.embedded.exceptions import (
 from superset.commands.exceptions import ForbiddenError
 from superset.exceptions import SupersetGenericErrorException
 from superset.extensions import db, event_logger
+from superset.models.dashboard import Dashboard
 from superset.security.guest_token import GuestTokenResourceType
 from superset.views.base_api import (
     BaseSupersetApi,
@@ -360,3 +361,27 @@ class UserRegistrationsRestAPI(BaseSupersetModelRestApi):
         "registration_date",
         "registration_hash",
     ]
+
+class UserFKRestAPI(BaseSupersetApi):
+    "API for finding a user's foreign key constraints"
+    resource_name = "security/user"
+    @expose("/<int:user_id>/fk-references/", methods=("GET",))
+    @safe
+    def fk_constraints(self, user_id: int) -> Response:
+      "returns true if user_id is found in another superset table"
+      # fk_tables = [("dashboards", "created_by_fk"), ("dashboards", "changed_by_fk")]
+      # for table_name, column_name in fk_tables:
+      #   sql = f"SELECT 1 FROM {table_name} WHERE {column_name} = :user_id LIMIT 1"
+      #   result = db.session.execute(sql, {"user_id": user_id}).first()
+      #   if result:
+      #       return "1"
+      # return "0"
+      fk_tables = [
+        (Dashboard, Dashboard.created_by_fk),
+        (Dashboard, Dashboard.changed_by_fk),
+       ]
+
+      for table, column in fk_tables:
+          if db.session.query(table).filter(column == user_id).limit(1).first():
+              return "1"
+      return "0"

@@ -40,7 +40,7 @@ import {
   UserListEditModal,
 } from 'src/features/users/UserListModal';
 import { useToasts } from 'src/components/MessageToasts/withToasts';
-import { deleteUser } from 'src/features/users/utils';
+import { deleteUser, userFKReferences } from 'src/features/users/utils';
 import { fetchPaginatedData } from 'src/utils/fetchOptions';
 import type { UsersListProps, Group, Role, UserObject } from './types';
 
@@ -150,6 +150,13 @@ function UsersList({ user }: UsersListProps) {
 
   const handleUserDelete = async ({ id, username }: UserObject) => {
     try {
+      //find out if the user has data in tables with fk constraints
+      const dirty = await userFKReferences(id);
+      if (dirty)
+        addDangerToast(t('This user has associated data', username));
+      //if so, offer reassignment
+      //if not, handle delete as usual
+
       await deleteUser(id);
       refreshData();
       setUserCurrentlyDeleting(null);

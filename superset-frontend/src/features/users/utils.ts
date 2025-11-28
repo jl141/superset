@@ -43,6 +43,11 @@ export const deleteUser = async (userId: number) =>
     endpoint: `/api/v1/security/users/${userId}`,
   });
 
+export const userFKReferences = async (userId: number) =>
+  SupersetClient.get({
+    endpoint: `/api/v1/security/user/${userId}/fk-references`,
+  });
+
 export const atLeastOneRoleOrGroup =
   (fieldToCheck: 'roles' | 'groups') =>
   ({

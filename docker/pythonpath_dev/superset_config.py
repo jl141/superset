@@ -42,6 +42,8 @@ EXAMPLES_HOST = os.getenv("EXAMPLES_HOST")
 EXAMPLES_PORT = os.getenv("EXAMPLES_PORT")
 EXAMPLES_DB = os.getenv("EXAMPLES_DB")
 
+FAB_ADD_SECURITY_API = True
+
 # The SQLAlchemy connection string.
 SQLALCHEMY_DATABASE_URI = (
     f"{DATABASE_DIALECT}://"
