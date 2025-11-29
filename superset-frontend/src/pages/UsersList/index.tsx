@@ -43,7 +43,6 @@ import {
 import { useToasts } from 'src/components/MessageToasts/withToasts';
 import {
   deleteUser,
-  getUserAssets,
   reassignUserAssets,
 } from 'src/features/users/utils';
 import { fetchPaginatedData } from 'src/utils/fetchOptions';
@@ -164,7 +163,7 @@ function UsersList({ user }: UsersListProps) {
         open: true,
         userToDelete: { id, username } as UserObject,
       });
-      await deleteUser(id);
+      // await deleteUser(id);
       refreshData();
       setUserCurrentlyDeleting(null);
       addSuccessToast(t('Deleted user: %s', username));
@@ -174,69 +173,22 @@ function UsersList({ user }: UsersListProps) {
   };
 
   const handleReassignAssets = async (newOwnerId: number) => {
-    if (!reassignmentModalState.userToDelete) return;
     const userToDelete = reassignmentModalState.userToDelete;
-    try {
-      // Get all assets owned by the user
-      const assets = await getUserAssets(userToDelete.id);
-      console.log('fetched assets for user', userToDelete.id, assets);
-      // Reassign all asset types (run and log each result)
-      const reassignPromises: Array<Promise<any>> = [];
-      if (assets.dashboards.length > 0) {
-        reassignPromises.push(
-          reassignUserAssets(
-            userToDelete.id,
-            newOwnerId,
-            'dashboard',
-            assets.dashboards,
-          ),
-        );
-      }
-      if (assets.charts.length > 0) {
-        reassignPromises.push(
-          reassignUserAssets(
-            userToDelete.id,
-            newOwnerId,
-            'chart',
-            assets.charts,
-          ),
-        );
-      }
-      if (assets.datasets.length > 0) {
-        reassignPromises.push(
-          reassignUserAssets(
-            userToDelete.id,
-            newOwnerId,
-            'dataset',
-            assets.datasets,
-          ),
-        );
-      }
+    if (!userToDelete) return;
 
-      if (reassignPromises.length > 0) {
-        const results = await Promise.allSettled(reassignPromises);
-        const rejected = results.filter(r => r.status === 'rejected');
-        if (rejected.length > 0) {
-          console.error('Some reassign operations failed', rejected);
-          // surface an error to the user but continue to attempt delete below
-          addDangerToast(
-            t(
-              'One or more reassign operations failed for %s — check console for details',
-              userToDelete.username,
-            ),
-          );
-        }
-      } else {
-        console.log('no assets to reassign for user', userToDelete.id);
-      }
+    try {
+      await reassignUserAssets(userToDelete.id, newOwnerId);
 
       refreshData();
       setReassignmentModalState({ open: false, userToDelete: null });
       setUserCurrentlyDeleting(null);
       addSuccessToast(
-        t('Assets reassigned and user deleted: %s', userToDelete.username),
+        t(
+          'Assets reassigned successfully and user deleted: %s',
+          userToDelete.username
+        ),
       );
-    } catch (reassignmentError) {
+    } catch (error) {
       addDangerToast(
         t('Error reassigning assets for %s', userToDelete.username),
       );

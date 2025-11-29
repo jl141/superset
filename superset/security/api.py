@@ -22,7 +22,7 @@ from flask_appbuilder import expose
 from flask_appbuilder.api import rison, safe, SQLAInterface
 from flask_appbuilder.api.schemas import get_list_schema
 from flask_appbuilder.security.decorators import permission_name, protect
-from flask_appbuilder.security.sqla.models import RegisterUser, Role
+from flask_appbuilder.security.sqla.models import RegisterUser, Role, User
 from flask_wtf.csrf import generate_csrf
 from marshmallow import EXCLUDE, fields, post_load, Schema, ValidationError
 from sqlalchemy import asc, desc
@@ -40,6 +40,9 @@ from superset.views.base_api import (
     BaseSupersetModelRestApi,
     statsd_metrics,
 )
+from superset.models.sql_lab import SavedQuery
+from superset.models.dashboard import Dashboard
+from superset.models.slice import Slice
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +102,92 @@ class RolesResponseSchema(PermissiveSchema):
 
 
 guest_token_create_schema = GuestTokenCreateSchema()
+
+class ReassignmentRestAPI(BaseSupersetApi):
+    """
+    APIs for reassigning user-owned objects to another user
+    """
+
+    resource_name = "security/reassignment"
+    allow_browser_login = True
+
+    @expose("/users/<int:user_id>/reassign/", methods=("POST", "GET"))
+    @event_logger.log_this
+    @protect()
+    @safe
+    @statsd_metrics
+    @permission_name("post")
+    def reassign_owned_objects(self, user_id: int) -> Response:
+        """
+        Reassign all objects owned by the specified user to another user.
+
+        ---
+        post:
+          summary: Reassign user-owned objects
+          parameters:
+            - in: path
+              name: user_id
+              schema:
+                type: integer
+              required: true
+              description: ID of the user whose objects are to be reassigned
+          requestBody:
+            description: Target user ID for reassignment
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    target_user_id:
+                      type: integer
+          responses:
+            200:
+              description: Successfully reassigned user-owned objects
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+            400:
+              $ref: '#/components/responses/400'
+            403:
+              $ref: '#/components/responses/403'
+        """
+        try:
+            target_user_id = request.json["target_user_id"]  # outside a method
+            if not target_user_id:
+                return self.response_400(message="Missing target_user_id")
+            
+            new_owner = db.session.query(User).get(target_user_id)
+
+            OWNABLE_MODELS = [Dashboard, Slice]
+            for model_cls in OWNABLE_MODELS:
+                assets = db.session.query(model_cls).filter(model_cls.owners.any(User.id == user_id)).all()            
+                
+                for asset in assets:
+                    asset.owners = [o for o in asset.owners if o.id != user_id]
+                    if new_owner.id not in {o.id for o in asset.owners}:
+                        asset.owners.append(new_owner)
+            db.session.commit()
+
+            OWNABLE_MODELS_SingleOwner = [SavedQuery]
+            for model_cls in OWNABLE_MODELS_SingleOwner:
+                assets = db.session.query(model_cls).filter(user_id == user_id).all()            
+                for asset in assets:
+                    asset.user = new_owner
+            db.session.commit()
+
+            return self.response(
+                200,
+                message=f"User-owned objects reassigned successfully {user_id} to {target_user_id}"
+            )        
+        except ForbiddenError as e:
+            return self.response_403(message=str(e))
+        except Exception as e:
+            return self.response_500(message=str(e))
 
 
 class SecurityRestApi(BaseSupersetApi):

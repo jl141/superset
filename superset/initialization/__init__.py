@@ -185,6 +185,7 @@ class SupersetAppInitializer:  # pylint: disable=too-many-public-methods
         from superset.security.api import (
             RoleRestAPI,
             SecurityRestApi,
+            ReassignmentRestAPI,
             UserRegistrationsRestAPI,
         )
         from superset.sqllab.api import SqlLabRestApi
@@ -486,6 +487,7 @@ class SupersetAppInitializer:  # pylint: disable=too-many-public-methods
                 and self.config["SUPERSET_LOG_VIEW"]
             ),
         )
+        appbuilder.add_api(ReassignmentRestAPI)
         appbuilder.add_api(SecurityRestApi)
         #
         # Conditionally setup email views
