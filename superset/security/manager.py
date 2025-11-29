@@ -60,6 +60,7 @@ from superset.exceptions import (
     DatasetInvalidPermissionEvaluationException,
     SupersetSecurityException,
 )
+from superset.security.filters import NotDeletedUserFilter
 from superset.security.guest_token import (
     GuestToken,
     GuestTokenResources,
@@ -168,6 +169,9 @@ class SupersetUserApi(UserApi):
         Overriding this method to be able to delete items when they have constraints
         """
         item.roles = []
+
+    #querying securiy/users returns nondeleted users
+    base_filters = [["deleted", NotDeletedUserFilter, lambda: []]]
 
 
 PermissionViewModelView.list_widget = SupersetSecurityListWidget
@@ -398,6 +402,16 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
 
     guest_user_cls = GuestUser
     pyjwt_for_guest_token = _jwt_global_obj
+
+    # #overriding get users at endpoint security/users/
+    # def get_user_by_id(self, pk: int):
+    #     return (
+    #         self.session
+    #             .query(self.user_model)
+    #             .filter(self.user_model.id == pk)
+    #             .filter(self.user_model.deleted.is_(False))
+    #             .one_or_none()
+    #     )
 
     def create_login_manager(self, app: Flask) -> LoginManager:
         lm = super().create_login_manager(app)
