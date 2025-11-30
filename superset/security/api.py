@@ -103,6 +103,27 @@ class RolesResponseSchema(PermissiveSchema):
 
 guest_token_create_schema = GuestTokenCreateSchema()
 
+ASSETS = {
+    'dashboards': {
+        'model': Dashboard,
+        'is_single_owner': False,
+        'name_field': 'dashboard_title',
+        'list': [],
+    },
+    'charts': {
+        'model': Slice,
+        'is_single_owner': False,
+        'name_field': 'slice_name',
+        'list': [],
+    },
+    'saved_queries': {
+        'model': SavedQuery,
+        'is_single_owner': True,
+        'name_field': 'label',
+        'list': [],
+    },
+}
+
 class ReassignmentRestAPI(BaseSupersetApi):
     """
     APIs for reassigning user-owned objects to another user
@@ -111,7 +132,87 @@ class ReassignmentRestAPI(BaseSupersetApi):
     resource_name = "security/reassignment"
     allow_browser_login = True
 
-    @expose("/users/<int:user_id>/reassign/", methods=("POST", "GET"))
+    @expose("/users/<int:user_id>/assets/summary", methods=["GET"])
+    @event_logger.log_this
+    @protect()
+    @safe
+    @statsd_metrics
+    @permission_name("get")
+    def asset_summary(self, user_id: int) -> Response:
+        """
+        Returns a summary of the assets (dashboards, charts, saved queries) owned by 
+        the user with ID user_id that must be reassigned before user deletion.
+
+        ---
+        get:
+          summary: Get a summary of the user's reassignable assets
+          parameters:
+            - in: path
+              name: user_id
+              schema:
+                type: integer
+              required: true
+              description: ID of the user who may own reassignable assets
+          responses:
+            200:
+              description: Names of user's assets
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      count:
+                        description: The number of assets
+                        type: integer
+                      dashboards:
+                        description: >-
+                          A list of names of dashboards owned by the user
+                        type: array
+                        items:
+                          type: string
+                      charts:
+                        description: >-
+                          A list of names of charts owned by the user
+                        type: array
+                        items:
+                          type: string
+                      saved_queries:
+                        description: >-
+                          A list of names of saved queries owned by the user
+                        type: array
+                        items:
+                          type: string
+            403:
+              $ref: '#/components/responses/403'
+            500:
+              $ref: '#/components/responses/500'
+        """
+        try:
+            count = 0
+            for a in ASSETS.values():
+                a['list'] = []
+                assets = None
+                if a['is_single_owner']:
+                    assets = db.session.query(a['model']).filter(a['model'].user_id == user_id).all()
+                else:
+                    assets = db.session.query(a['model']).filter(a['model'].owners.any(User.id == user_id)).all()
+                for asset in assets:
+                    count += 1
+                    a['list'].append(getattr(asset, a['name_field']))
+
+            return self.response(
+                200,
+                count=count,
+                dashboards=ASSETS['dashboards']['list'],
+                charts=ASSETS['charts']['list'],
+                saved_queries=ASSETS['saved_queries']['list'],
+            )
+        except ForbiddenError as e:
+            return self.response_403(message=str(e))
+        except Exception as e:
+            return self.response_500(message=str(e))
+
+    @expose("/users/<int:user_id>/reassign/", methods=["POST", "GET"])
     @event_logger.log_this
     @protect()
     @safe
@@ -119,7 +220,8 @@ class ReassignmentRestAPI(BaseSupersetApi):
     @permission_name("post")
     def reassign_owned_objects(self, user_id: int) -> Response:
         """
-        Reassign all objects owned by the specified user to another user.
+        Reassign all objects (dashboards, charts, saved queries) owned by the
+        user with ID user_id to the user specified by the request payload.
 
         ---
         post:
@@ -151,10 +253,10 @@ class ReassignmentRestAPI(BaseSupersetApi):
                     properties:
                       message:
                         type: string
-            400:
-              $ref: '#/components/responses/400'
             403:
               $ref: '#/components/responses/403'
+            500:
+              $ref: '#/components/responses/500'
         """
         try:
             target_user_id = request.json["target_user_id"]  # outside a method
@@ -163,27 +265,23 @@ class ReassignmentRestAPI(BaseSupersetApi):
             
             new_owner = db.session.query(User).get(target_user_id)
 
-            OWNABLE_MODELS = [Dashboard, Slice]
-            for model_cls in OWNABLE_MODELS:
-                assets = db.session.query(model_cls).filter(model_cls.owners.any(User.id == user_id)).all()            
-                
-                for asset in assets:
-                    asset.owners = [o for o in asset.owners if o.id != user_id]
-                    if new_owner.id not in {o.id for o in asset.owners}:
-                        asset.owners.append(new_owner)
-            db.session.commit()
-
-            OWNABLE_MODELS_SingleOwner = [SavedQuery]
-            for model_cls in OWNABLE_MODELS_SingleOwner:
-                assets = db.session.query(model_cls).filter(user_id == user_id).all()            
-                for asset in assets:
-                    asset.user = new_owner
+            for a in ASSETS.values():
+                if a['is_single_owner']:
+                    assets = db.session.query(a['model']).filter(a['model'].user_id == user_id).all()
+                    for asset in assets:
+                        asset.user = new_owner
+                else:
+                    assets = db.session.query(a['model']).filter(a['model'].owners.any(User.id == user_id)).all()
+                    for asset in assets:
+                        asset.owners = [o for o in asset.owners if o.id != user_id]
+                        if new_owner.id not in {o.id for o in asset.owners}:
+                            asset.owners.append(new_owner)
             db.session.commit()
 
             return self.response(
                 200,
-                message=f"User-owned objects reassigned successfully {user_id} to {target_user_id}"
-            )        
+                message=f"User-owned objects successfully reassigned from {user_id} to {target_user_id}"
+            )
         except ForbiddenError as e:
             return self.response_403(message=str(e))
         except Exception as e:
