@@ -283,44 +283,49 @@ export const UserListEditModal = (
   props: Omit<UserModalProps, 'isEditMode'> & { user: UserObject },
 ) => <UserListModal {...props} isEditMode />;
 
-export interface UserReassignmentModalProps {
+
+export interface UserDeleteModalProps {
   userToDelete: UserObject;
   availableUsers: UserObject[];
-  onConfirm: (newOwnerId: number) => void;
+  onConfirm: (payload: { newOwnerId: number | null; hardDelete: boolean }) => void;
   onCancel: () => void;
 }
 
-export function UserReassignmentModal({
+export function UserDeleteModal({
   userToDelete,
   availableUsers,
   onConfirm,
   onCancel,
-}: UserReassignmentModalProps) {
+}: UserDeleteModalProps) {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [hardDelete, setHardDelete] = useState(true);
+  const [confirmationText, setConfirmationText] = useState('');
 
   const handleSubmit = () => {
-    if (selectedUserId) {
-      onConfirm(selectedUserId);
-    }
+    onConfirm({ newOwnerId: selectedUserId, hardDelete: hardDelete});
   };
+
+  const disableSubmit =
+    !selectedUserId || (hardDelete && confirmationText.toUpperCase() !== 'DELETE');
 
   return (
     <Modal
       show
       onHide={onCancel}
-      title={t('Reassign Assets')}
+      title={t('Reassign Assets and Delete')}
       onHandledPrimaryAction={handleSubmit}
-      primaryButtonName={t('Reassign')}
+      primaryButtonName={t('Confirm')}
       primaryButtonStyle="danger"
-      disablePrimaryButton={!selectedUserId}
+      disablePrimaryButton={disableSubmit}
     >
       <FormItem>
-        <div style={{ marginBottom: '16px' }}>
-          {t(
-            'User "%s" owns dashboards, charts, or datasets. Select a user to reassign these assets to:',
-            userToDelete.username,
-          )}
+        <div style={{ marginBottom: '12px', fontWeight: 500 }}>
+          {t('User "%s" owns dashboards, charts, or savedQueries.', userToDelete.username)}
         </div>
+        <div style={{ marginBottom: '16px', fontSize: '13px', color: '#666' }}>
+          {t('Please select a user to reassign these assets to.')}
+        </div>
+
         <Select
           placeholder={t('Select a user')}
           value={selectedUserId}
@@ -329,7 +334,33 @@ export function UserReassignmentModal({
             label: `${user.first_name} ${user.last_name} (@${user.username})`,
             value: user.id,
           }))}
+          style={{ width: '100%', marginBottom: '16px' }}
         />
+
+        <Checkbox
+          checked={!hardDelete} 
+          onChange={e => setHardDelete(!e.target.checked)}
+          style={{ marginBottom: '12px' }}
+        >
+          {t(
+            "Soft delete user. Selecting this option allows for future retrieval of this user's account from the database."
+          )}
+        </Checkbox>
+  
+        <FormItem>
+          <Input
+            placeholder={t('Type DELETE to confirm')}
+            value={confirmationText}
+            onChange={e => setConfirmationText(e.target.value)}
+            style={{ width: '100%' }}
+          />
+        </FormItem>
+
+        {confirmationText.toUpperCase() !== 'DELETE' && (
+          <div style={{ marginTop: '8px', fontSize: '12px', color: '#b00' }}>
+            {t('You must type DELETE to enable the button.')}
+          </div>
+        )}
       </FormItem>
     </Modal>
   );

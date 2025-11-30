@@ -25,7 +25,6 @@ import { ActionsBar, ActionProps } from 'src/components/ListView/ActionsBar';
 import {
   Tooltip,
   Icons,
-  DeleteModal,
   ConfirmStatusChange,
 } from '@superset-ui/core/components';
 import {
@@ -38,7 +37,7 @@ import { isUserAdmin } from 'src/dashboard/util/permissionUtils';
 import {
   UserListAddModal,
   UserListEditModal,
-  UserReassignmentModal,
+  UserDeleteModal,
 } from 'src/features/users/UserListModal';
 import { useToasts } from 'src/components/MessageToasts/withToasts';
 import {
@@ -93,9 +92,7 @@ function UsersList({ user }: UsersListProps) {
     setModalState(prev => ({ ...prev, [type]: false }));
 
   const [currentUser, setCurrentUser] = useState<UserObject | null>(null);
-  const [userCurrentlyDeleting, setUserCurrentlyDeleting] =
-    useState<UserObject | null>(null);
-  const [reassignmentModalState, setReassignmentModalState] = useState({
+  const [DeleteModalState, setDeleteModalState] = useState({
     open: false,
     userToDelete: null as UserObject | null,
   });
@@ -156,37 +153,18 @@ function UsersList({ user }: UsersListProps) {
     fetchGroups();
   }, [fetchGroups]);
 
-  const handleUserDelete = async ({ id, username }: UserObject) => {
-    try {
-      // Option to reassign assets before deletetion
-      setReassignmentModalState({
-        open: true,
-        userToDelete: { id, username } as UserObject,
-      });
-      // await deleteUser(id);
-      refreshData();
-      setUserCurrentlyDeleting(null);
-      addSuccessToast(t('Deleted user: %s', username));
-    } catch (error) {
-      addDangerToast(t('There was an issue deleting %s', username));
-    }
-  };
 
-  const handleReassignAssets = async (newOwnerId: number) => {
-    const userToDelete = reassignmentModalState.userToDelete;
+  const handleUserDelete = async (newOwnerId: number, hardDelete: boolean) => {
+    const userToDelete = DeleteModalState.userToDelete;
     if (!userToDelete) return;
 
     try {
       await reassignUserAssets(userToDelete.id, newOwnerId);
 
       refreshData();
-      setReassignmentModalState({ open: false, userToDelete: null });
-      setUserCurrentlyDeleting(null);
+      setDeleteModalState({ open: false, userToDelete: null });
       addSuccessToast(
-        t(
-          'Assets reassigned successfully and user deleted: %s',
-          userToDelete.username
-        ),
+        t('Assets reassigned successfully for %s', userToDelete.username),
       );
     } catch (error) {
       addDangerToast(
@@ -371,7 +349,12 @@ function UsersList({ user }: UsersListProps) {
             setCurrentUser(original);
             openModal(ModalType.EDIT);
           };
-          const handleDelete = () => setUserCurrentlyDeleting(original);
+          const handleDelete = () => {
+            setDeleteModalState({
+              open: true,
+              userToDelete: original,
+            });
+          };
           const actions = isAdmin
             ? [
                 {
@@ -587,28 +570,19 @@ function UsersList({ user }: UsersListProps) {
         />
       )}
 
-      {userCurrentlyDeleting && (
-        <DeleteModal
-          description={t('This action will permanently delete the user.')}
-          onConfirm={() => {
-            if (userCurrentlyDeleting) {
-              handleUserDelete(userCurrentlyDeleting);
-            }
-          }}
-          onHide={() => setUserCurrentlyDeleting(null)}
-          open
-          title={t('Delete User?')}
-        />
-      )}
-      {reassignmentModalState.open && reassignmentModalState.userToDelete && (
-        <UserReassignmentModal
-          userToDelete={reassignmentModalState.userToDelete}
+      {DeleteModalState.open && DeleteModalState.userToDelete && (
+        <UserDeleteModal
+          userToDelete={DeleteModalState.userToDelete}
           availableUsers={users.filter(
-            u => u.id !== reassignmentModalState.userToDelete?.id,
+            u => u.id !== DeleteModalState.userToDelete?.id,
           )}
-          onConfirm={handleReassignAssets}
+          onConfirm={({ newOwnerId, hardDelete }) => {
+            // pass params in the expected order: (newOwnerId, hardDelete)
+            handleUserDelete(newOwnerId, hardDelete);
+            setDeleteModalState({ open: false, userToDelete: null });
+          }}
           onCancel={() =>
-            setReassignmentModalState({ open: false, userToDelete: null })
+            setDeleteModalState({ open: false, userToDelete: null })
           }
         />
       )}
