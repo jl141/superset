@@ -577,8 +577,9 @@ function UsersList({ user }: UsersListProps) {
             u => u.id !== DeleteModalState.userToDelete?.id,
           )}
           onConfirm={({ newOwnerId, hardDelete }) => {
-            // pass params in the expected order: (newOwnerId, hardDelete)
-            handleUserDelete(newOwnerId, hardDelete);
+            if (newOwnerId !== null) {
+              handleUserDelete(newOwnerId, hardDelete);
+            }
             setDeleteModalState({ open: false, userToDelete: null });
           }}
           onCancel={() =>

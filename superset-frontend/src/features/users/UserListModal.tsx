@@ -306,7 +306,7 @@ export function UserDeleteModal({
   };
 
   const disableSubmit =
-    !selectedUserId || (hardDelete && confirmationText.toUpperCase() !== 'DELETE');
+    !selectedUserId || (confirmationText.toUpperCase() !== 'DELETE');
 
   return (
     <Modal
@@ -326,16 +326,18 @@ export function UserDeleteModal({
           {t('Please select a user to reassign these assets to.')}
         </div>
 
-        <Select
-          placeholder={t('Select a user')}
-          value={selectedUserId}
-          onChange={(value: number) => setSelectedUserId(value)}
-          options={availableUsers.map(user => ({
-            label: `${user.first_name} ${user.last_name} (@${user.username})`,
-            value: user.id,
-          }))}
-          style={{ width: '100%', marginBottom: '16px' }}
-        />
+        <div style={{ marginBottom: '8px', fontWeight: 500 }}>
+          <Select
+            placeholder={t('Select a user')}
+            value={selectedUserId}
+            onChange={(value: number) => setSelectedUserId(value)}
+            options={availableUsers.map(user => ({
+              label: `${user.first_name} ${user.last_name} (@${user.username})`,
+              value: user.id,
+            }))}
+          />
+        </div>
+        
 
         <Checkbox
           checked={!hardDelete} 
