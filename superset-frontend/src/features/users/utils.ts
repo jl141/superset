@@ -22,7 +22,8 @@ import { FormValues } from './types';
 
 export const softDeleteUser = async (user_Id: number) => {
   await SupersetClient.post({
-    endpoint: `/api/v1/security/users/soft_delete/${user_Id}`
+    //endpoint: `/api/v1/security/users/soft_delete/${user_Id}`
+    endpoint: `/api/v1/users/soft_delete/${user_Id}`
   })
 }
 

@@ -174,28 +174,26 @@ class SupersetUserApi(UserApi):
         """
         item.roles = []
     
-    #resource_name = "security/users"
-
     base_filters = [["is_deleted", NotDeletedUserFilter, lambda: []]]
     
-    @expose("/soft_delete/<pk>", methods=["POST"])
-    @safe
-    def soft_delete(self, pk):
-        from superset.models.user import SupersetUser  # local import to avoid circular dependency
-        from superset import db
+    # @expose("/soft_delete/<pk>", methods=["POST"])
+    # @safe
+    # def soft_delete(self, pk):
+    #     from superset.models.user import SupersetUser  # local import to avoid circular dependency
+    #     from superset import db
 
-        user = db.session.get(SupersetUser, pk)
-        if not user:
-            return self.response_404()
-        if user.is_deleted:
-            return self.response(204)
+    #     user = db.session.get(SupersetUser, pk)
+    #     if not user:
+    #         return self.response_404()
+    #     if user.is_deleted:
+    #         return self.response(204)
 
-        user.is_deleted = True
-        user.active = False
-        user.deleted_on = datetime.utcnow()
-        db.session.commit()
+    #     user.is_deleted = True
+    #     user.active = False
+    #     user.deleted_on = datetime.utcnow()
+    #     db.session.commit()
 
-        return self.response(200)
+    #     return self.response(200)
 
     # @expose("/soft_delete/<pk>", methods=["POST"])
     # @safe

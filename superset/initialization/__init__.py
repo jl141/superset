@@ -182,6 +182,7 @@ class SupersetAppInitializer:  # pylint: disable=too-many-public-methods
             RoleRestAPI,
             SecurityRestApi,
             UserRegistrationsRestAPI,
+            UserSoftDeletionAPI
         )
         from superset.sqllab.api import SqlLabRestApi
         from superset.sqllab.permalink.api import SqlLabPermalinkRestApi
@@ -470,6 +471,7 @@ class SupersetAppInitializer:  # pylint: disable=too-many-public-methods
         )
         appbuilder.add_api(LogRestApi)
         appbuilder.add_api(UserRegistrationsRestAPI)
+        appbuilder.add_api(UserSoftDeletionAPI)
         appbuilder.add_view(
             ActionLogView,
             "Action Log",
