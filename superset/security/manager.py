@@ -17,6 +17,7 @@
 # pylint: disable=too-many-lines
 """A set of constants and methods to manage permissions and security"""
 
+from datetime import datetime
 import logging
 import re
 import time
@@ -44,10 +45,12 @@ from flask_appbuilder.security.views import (
     ViewMenuModelView,
 )
 from flask_appbuilder.widgets import ListWidget
+from flask_appbuilder.api import expose, protect, safe
 from flask_babel import lazy_gettext as _
 from flask_login import AnonymousUserMixin, LoginManager
+
 from jwt.api_jwt import _jwt_global_obj
-from sqlalchemy import and_, inspect, or_
+from sqlalchemy import and_, inspect, or_,  Boolean, Column, DateTime
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.orm import eagerload
 from sqlalchemy.orm.mapper import Mapper
@@ -60,6 +63,7 @@ from superset.exceptions import (
     DatasetInvalidPermissionEvaluationException,
     SupersetSecurityException,
 )
+from superset.security.filters import NotDeletedUserFilter
 from superset.security.guest_token import (
     GuestToken,
     GuestTokenResources,
@@ -168,7 +172,8 @@ class SupersetUserApi(UserApi):
         Overriding this method to be able to delete items when they have constraints
         """
         item.roles = []
-
+    
+    base_filters = [["is_deleted", NotDeletedUserFilter, lambda: []]]
 
 PermissionViewModelView.list_widget = SupersetSecurityListWidget
 PermissionModelView.list_widget = SupersetSecurityListWidget
@@ -251,7 +256,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
 
     role_api = SupersetRoleApi
     user_api = SupersetUserApi
-
+    
     USER_MODEL_VIEWS = {
         "RegisterUserModelView",
         "UserDBModelView",
@@ -951,7 +956,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
             tables = (
                 self.session.query(SqlaTable.schema)
                 .filter(SqlaTable.database_id == database.id)
-                .filter(or_(SqlaTable.perm.in_(perms)))
+                .filter(or_(SqlaTable.perm.in_(perms)))  # type: ignore[union-attr]
                 .distinct()
             )
             accessible_schemas.update(
@@ -1011,7 +1016,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
             tables = (
                 self.session.query(SqlaTable.schema)
                 .filter(SqlaTable.database_id == database.id)
-                .filter(or_(SqlaTable.perm.in_(perms)))
+                .filter(or_(SqlaTable.perm.in_(perms)))  # type: ignore[union-attr]
                 .distinct()
             )
             accessible_catalogs.update(
@@ -2346,10 +2351,9 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
                     query, template_params
                 )
                 tables = {
-                    Table(
-                        table_.table,
-                        table_.schema or default_schema,
-                        table_.catalog or query.catalog or default_catalog,
+                    table_.qualify(
+                        catalog=query.catalog or default_catalog,
+                        schema=default_schema,
                     )
                     for table_ in process_jinja_sql(
                         query.sql, database, template_params
@@ -2357,9 +2361,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
                 }
             elif table:
                 # Make sure table has the default catalog, if not specified.
-                tables = {
-                    Table(table.table, table.schema, table.catalog or default_catalog)
-                }
+                tables = {table.qualify(catalog=default_catalog)}
 
             denied = set()
 
@@ -2372,7 +2374,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
                     continue
 
                 schema_perm = self.get_schema_perm(
-                    database,
+                    database.database_name,
                     table_.catalog,
                     table_.schema,
                 )
@@ -2388,7 +2390,7 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
                 for datasource_ in datasources:
                     if self.can_access(
                         "datasource_access",
-                        datasource_.perm,
+                        datasource_.perm or "",
                     ) or self.is_owner(datasource_):
                         # access to any datasource is sufficient
                         break
@@ -2878,7 +2880,30 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
             SupersetRegisterUserView
         )
 
-        super().register_views()
+        # Apply rate limiting to auth view if enabled
+        # This needs to be done after the view is added, otherwise the blueprint
+        # is not initialized. Only apply if blueprint exists.
+        # We also need to prevent the parent's register_views from trying to
+        # apply rate limiting again (since auth_view already exists), so we
+        # temporarily disable AUTH_RATE_LIMITED during the super() call.
+        if (
+            self.is_auth_limited
+            and getattr(self.auth_view, "blueprint", None) is not None
+        ):
+            self.limiter.limit(self.auth_rate_limit, methods=["POST"])(
+                self.auth_view.blueprint
+            )
+
+        # Temporarily disable AUTH_RATE_LIMITED to prevent parent from trying to
+        # apply rate limiting to a potentially None blueprint
+        original_auth_rate_limited = current_app.config["AUTH_RATE_LIMITED"]
+        current_app.config["AUTH_RATE_LIMITED"] = False
+
+        try:
+            super().register_views()
+        finally:
+            # Restore original value even if an exception occurs
+            current_app.config["AUTH_RATE_LIMITED"] = original_auth_rate_limited
 
         for view in list(self.appbuilder.baseviews):
             if isinstance(view, self.rolemodelview.__class__) and getattr(

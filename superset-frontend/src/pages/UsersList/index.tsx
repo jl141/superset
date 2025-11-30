@@ -44,6 +44,7 @@ import {
   deleteUser,
   getUserAssetsSummary,
   reassignUserAssets,
+  softDeleteUser,
 } from 'src/features/users/utils';
 import { fetchPaginatedData } from 'src/utils/fetchOptions';
 import type {

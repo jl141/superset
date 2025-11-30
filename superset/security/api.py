@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from datetime import datetime
 import logging
 from typing import Any
 
@@ -547,3 +548,24 @@ class UserRegistrationsRestAPI(BaseSupersetModelRestApi):
         "registration_date",
         "registration_hash",
     ]
+
+class UserSoftDeletionAPI(BaseSupersetApi):
+    resource_name = "users"
+    @expose("/soft_delete/<pk>", methods=["POST"])
+    @safe
+    def soft_delete(self, pk):
+        from superset.models.user import SupersetUser  # local import to avoid circular dependency
+        from superset import db
+
+        user = db.session.get(SupersetUser, pk)
+        if not user:
+            return self.response_404()
+        if user.is_deleted:
+            return self.response(204)
+
+        user.is_deleted = True
+        user.active = False
+        user.deleted_on = datetime.utcnow()
+        db.session.commit()
+
+        return self.response(200)
