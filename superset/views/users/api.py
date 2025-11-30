@@ -240,13 +240,3 @@ class UserRestApi(BaseSupersetApi):
 
         # No avatar found, return a "no-content" response
         return Response(status=204)
-    
-    # @expose("/<int:user_id>/soft_delete", methods=["POST"])
-    # #@protect()
-    # @safe
-    # def soft_delete(self, user_id: int):
-    #     user = UserDAO.find_by_id(user_id)
-    #     if not user:
-    #         return self.response_404()
-    #     UserDAO.set_deleted(user)
-    #     return self.response(200, message="User marked as deleted")

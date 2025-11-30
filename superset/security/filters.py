@@ -9,7 +9,6 @@ class NotDeletedUserFilter(BaseFilter):
     name = "Filter non-deleted users"
 
     def apply(self, query, value):
-       #return query.filter(self.model.is_deleted.is_(False))
         from superset.models.user import SupersetUser
         return query.filter(SupersetUser.__table__.c.is_deleted.is_(False))
     
