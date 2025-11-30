@@ -184,6 +184,7 @@ class SupersetUserApi(UserApi):
         """
         item.roles = []
 
+<<<<<<< HEAD
     datamodel = SQLAInterface(User)
 
 
@@ -242,6 +243,35 @@ class SupersetUserApi(UserApi):
 
    # base_filters = [["deleted", NotDeletedUserFilter, lambda: []]]
     #base_filters = [["deleted", "superset.security.filters.NotDeletedUserFilter", lambda: []]]
+=======
+    # Exclude soft-deleted users from list results
+    def _get_list_query(self):  # type: ignore[override]
+        """Return the base SQLAlchemy query for listing users, excluding deleted.
+
+        Flask-AppBuilder's UserApi builds a base query for list endpoints.
+        We override and apply `~User.is_deleted` to ensure deleted users
+        do not appear in any listings.
+        """
+        try:
+            base_query = super()._get_list_query()  # type: ignore[attr-defined]
+        except Exception:
+            # Fallback: some FAB versions use `_get_base_query` or `get_list`.
+            base_query = super()._get_base_query()  # type: ignore[attr-defined]
+
+        user_model = security_manager.user_model
+        # Apply hard exclude; migration guarantees column exists.
+        return base_query.filter(~user_model.is_deleted)
+
+    # Compatibility for FAB variants that use `_get_base_query`
+    def _get_base_query(self):  # type: ignore[override]
+        try:
+            base_query = super()._get_base_query()  # type: ignore[attr-defined]
+            user_model = security_manager.user_model
+            return base_query.filter(~user_model.is_deleted)
+        except Exception:
+            return super()._get_base_query()  # type: ignore[attr-defined]
+
+>>>>>>> e54b8efc1 (feat(security): hard-exclude deleted users; add is_deleted migration)
 
 PermissionViewModelView.list_widget = SupersetSecurityListWidget
 PermissionModelView.list_widget = SupersetSecurityListWidget
@@ -275,67 +305,7 @@ def query_context_modified(query_context: "QueryContext") -> bool:
 
     # cannot request a different chart
     if form_data.get("slice_id") != stored_chart.id:
-        return True
-
-    stored_query_context = (
-        json.loads(cast(str, stored_chart.query_context))
-        if stored_chart.query_context
-        else None
-    )
-
-    # compare columns and metrics in form_data with stored values
-    for key, equivalent in [
-        ("metrics", ["metrics"]),
-        ("columns", ["columns", "groupby"]),
-        ("groupby", ["columns", "groupby"]),
-        ("orderby", ["orderby"]),
-    ]:
-        requested_values = {freeze_value(value) for value in form_data.get(key) or []}
-        stored_values = {
-            freeze_value(value) for value in stored_chart.params_dict.get(key) or []
-        }
-        if not requested_values.issubset(stored_values):
-            return True
-
-        # compare queries in query_context
-        queries_values = {
-            freeze_value(value)
-            for query in query_context.queries
-            for value in getattr(query, key, []) or []
-        }
-        if stored_query_context:
-            for query in stored_query_context.get("queries") or []:
-                for key in equivalent:
-                    stored_values.update(
-                        {freeze_value(value) for value in query.get(key) or []}
-                    )
-
-        if not queries_values.issubset(stored_values):
-            return True
-
-    return False
-
-
-class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
-    SecurityManager
-):
-    userstatschartview = None
-    READ_ONLY_MODEL_VIEWS = {"Database", "DynamicPlugin"}
-
-    role_api = SupersetRoleApi
-    user_api = SupersetUserApi
-
-    USER_MODEL_VIEWS = {
-        "RegisterUserModelView",
-        "UserDBModelView",
-        "UserLDAPModelView",
-        "UserInfoEditView",
-        "UserOAuthModelView",
-        "UserOIDModelView",
-        "UserRemoteUserModelView",
-    }
-
-    GAMMA_READ_ONLY_MODEL_VIEWS = {
+    # Exclude soft-deleted users from list results
         "Dataset",
         "Datasource",
     } | READ_ONLY_MODEL_VIEWS
@@ -361,8 +331,6 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         # Guarding all AB_ADD_SECURITY_API = True REST APIs
         "RoleRestAPI",
         "Group",
-        "Role",
-        "Permission",
         "PermissionViewMenu",
         "ViewMenu",
         "User",
