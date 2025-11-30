@@ -55,7 +55,7 @@ from sqlalchemy.orm.query import Query as SqlaQuery
 from sqlalchemy.sql import exists
 
 from superset.constants import RouteMethod
-from superset import security_manager
+#from superset import security_manager
 from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.exceptions import (
     DatasetInvalidPermissionEvaluationException,
@@ -184,7 +184,7 @@ class SupersetUserApi(UserApi):
             # Fallback: some FAB versions use `_get_base_query` or `get_list`.
             base_query = super()._get_base_query()  # type: ignore[attr-defined]
 
-        user_model = security_manager.user_model
+        user_model = SupersetSecurityManager.user_model
         # Apply hard exclude; migration guarantees column exists.
         return base_query.filter(~user_model.is_deleted)
 
@@ -192,7 +192,7 @@ class SupersetUserApi(UserApi):
     def _get_base_query(self):  # type: ignore[override]
         try:
             base_query = super()._get_base_query()  # type: ignore[attr-defined]
-            user_model = security_manager.user_model
+            user_model = SupersetSecurityManager.user_model
             return base_query.filter(~user_model.is_deleted)
         except Exception:
             return super()._get_base_query()  # type: ignore[attr-defined]
