@@ -22,9 +22,9 @@ import re
 import time
 from collections import defaultdict
 from typing import Any, Callable, cast, NamedTuple, Optional, TYPE_CHECKING
+
 from flask import current_app, Flask, g, Request
 from flask_appbuilder import Model
-from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.security.sqla.apis import RoleApi, UserApi
 from flask_appbuilder.security.sqla.manager import SecurityManager
 from flask_appbuilder.security.sqla.models import (
@@ -55,15 +55,12 @@ from sqlalchemy.orm.query import Query as SqlaQuery
 from sqlalchemy.sql import exists
 
 from superset.constants import RouteMethod
+from superset import security_manager
 from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.exceptions import (
     DatasetInvalidPermissionEvaluationException,
     SupersetSecurityException,
 )
-#from .filters import NotDeletedUserFilter
-#from superset.models.user_attributes import UserAttribute
-#from ..views.base import BaseFilter
-
 from superset.security.guest_token import (
     GuestToken,
     GuestTokenResources,
@@ -106,18 +103,7 @@ def get_conf() -> Any:
 
 DATABASE_PERM_REGEX = re.compile(r"^\[.+\]\.\(id\:(?P<id>\d+)\)$")
 
-# class NotDeletedUserFilter(BaseFilter):
-#     #from superset.models.user_attributes import UserAttribute
-    
-#     #Filter out deleted users when getting all users
-#     name = "Filter non-deleted users"
 
-#     def apply(self, query, value):
-#         query.join(
-#             UserAttribute, 
-#             UserAttribute.user_id == self.model.id
-#             ).filter(UserAttribute.deleted.is_(False))
-        
 class DatabaseCatalogSchema(NamedTuple):
     database: str
     catalog: Optional[str]
@@ -184,66 +170,6 @@ class SupersetUserApi(UserApi):
         """
         item.roles = []
 
-<<<<<<< HEAD
-    datamodel = SQLAInterface(User)
-
-
-#     def get_list_headless(self, *args, **kwargs):
-#         session = self.datamodel.session
-#         from superset.models.user_attributes import UserAttribute
-
-#         query = (
-#             session.query(User)
-#             .outerjoin(User.extra_attributes)  # join the relationship
-#             .filter(or_(
-#                 UserAttribute.deleted.is_(False),
-#                 UserAttribute.deleted.is_(None)
-#             ))
-# )
-
-#         items = query.all()
-#         count = query.count()
-
-#         return items, count
-    
-
-    def get_list(self, *args, **kwargs):
-        """
-        Override the default get_list to filter out deleted users.
-        This will automatically be called by get_list_headless.
-    
-        """
-        items, count = super().get_list(*args, **kwargs)
-
-        # filter out users that have deleted=True in user_attributes
-        filtered_query = [
-            user for user in items
-            if not (user.extra_attributes and user.extra_attributes[0].deleted)
-        ]
-        items = filtered_query
-        count = len(filtered_query)
-
-        return items, count
-
-    
-    # def query(self):
-    #     from superset.models.user_attributes import UserAttribute
-    #     return (super().query()
-    #         .join(UserAttribute)
-    #         .filter(UserAttribute.deleted == True)
-    #     )
-
-    # deferred import inside the class for circular import safety
-    # @staticmethod
-    # def get_base_filters():
-    #     from superset.security.filters import NotDeletedUserFilter
-    #     return [["deleted", NotDeletedUserFilter, lambda: []]]
-
-    # #querying securiy/users returns nondeleted users
-
-   # base_filters = [["deleted", NotDeletedUserFilter, lambda: []]]
-    #base_filters = [["deleted", "superset.security.filters.NotDeletedUserFilter", lambda: []]]
-=======
     # Exclude soft-deleted users from list results
     def _get_list_query(self):  # type: ignore[override]
         """Return the base SQLAlchemy query for listing users, excluding deleted.
@@ -271,7 +197,6 @@ class SupersetUserApi(UserApi):
         except Exception:
             return super()._get_base_query()  # type: ignore[attr-defined]
 
->>>>>>> e54b8efc1 (feat(security): hard-exclude deleted users; add is_deleted migration)
 
 PermissionViewModelView.list_widget = SupersetSecurityListWidget
 PermissionModelView.list_widget = SupersetSecurityListWidget
@@ -305,7 +230,67 @@ def query_context_modified(query_context: "QueryContext") -> bool:
 
     # cannot request a different chart
     if form_data.get("slice_id") != stored_chart.id:
-    # Exclude soft-deleted users from list results
+        return True
+
+    stored_query_context = (
+        json.loads(cast(str, stored_chart.query_context))
+        if stored_chart.query_context
+        else None
+    )
+
+    # compare columns and metrics in form_data with stored values
+    for key, equivalent in [
+        ("metrics", ["metrics"]),
+        ("columns", ["columns", "groupby"]),
+        ("groupby", ["columns", "groupby"]),
+        ("orderby", ["orderby"]),
+    ]:
+        requested_values = {freeze_value(value) for value in form_data.get(key) or []}
+        stored_values = {
+            freeze_value(value) for value in stored_chart.params_dict.get(key) or []
+        }
+        if not requested_values.issubset(stored_values):
+            return True
+
+        # compare queries in query_context
+        queries_values = {
+            freeze_value(value)
+            for query in query_context.queries
+            for value in getattr(query, key, []) or []
+        }
+        if stored_query_context:
+            for query in stored_query_context.get("queries") or []:
+                for key in equivalent:
+                    stored_values.update(
+                        {freeze_value(value) for value in query.get(key) or []}
+                    )
+
+        if not queries_values.issubset(stored_values):
+            return True
+
+    return False
+
+
+class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
+    SecurityManager
+):
+    userstatschartview = None
+    READ_ONLY_MODEL_VIEWS = {"Database", "DynamicPlugin"}
+
+    role_api = SupersetRoleApi
+    user_api = SupersetUserApi
+
+    USER_MODEL_VIEWS = {
+        "RegisterUserModelView",
+        "UserDBModelView",
+        "UserLDAPModelView",
+        "UserInfoEditView",
+        "UserOAuthModelView",
+        "UserOIDModelView",
+        "UserRemoteUserModelView",
+    }
+
+    GAMMA_READ_ONLY_MODEL_VIEWS = {
         "Dataset",
         "Datasource",
     } | READ_ONLY_MODEL_VIEWS
@@ -331,6 +316,8 @@ def query_context_modified(query_context: "QueryContext") -> bool:
         # Guarding all AB_ADD_SECURITY_API = True REST APIs
         "RoleRestAPI",
         "Group",
+        "Role",
+        "Permission",
         "PermissionViewMenu",
         "ViewMenu",
         "User",
@@ -439,16 +426,6 @@ def query_context_modified(query_context: "QueryContext") -> bool:
 
     guest_user_cls = GuestUser
     pyjwt_for_guest_token = _jwt_global_obj
-
-    # #overriding get users at endpoint security/users/
-    # def get_user_by_id(self, pk: int):
-    #     return (
-    #         self.session
-    #             .query(self.user_model)
-    #             .filter(self.user_model.id == pk)
-    #             .filter(self.user_model.deleted.is_(False))
-    #             .one_or_none()
-    #     )
 
     def create_login_manager(self, app: Flask) -> LoginManager:
         lm = super().create_login_manager(app)
