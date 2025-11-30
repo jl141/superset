@@ -42,4 +42,3 @@ class UserAttribute(Model, AuditMixinNullable):
     welcome_dashboard_id = Column(Integer, ForeignKey("dashboards.id"))
     welcome_dashboard = relationship("Dashboard")
     avatar_url = Column(String(100))
-    deleted = Column(Boolean, default=False, nullable=False, server_default=text('false'))
