@@ -43,6 +43,11 @@ export const deleteUser = async (userId: number) =>
     endpoint: `/api/v1/security/users/${userId}`,
   });
 
+export const getUserAssetsSummary = (userId: number) =>
+  SupersetClient.get({
+    endpoint: `/api/v1/security/reassignment/users/${userId}/assets/summary`,
+  });
+
 export const reassignUserAssets = async (
   userId: number,
   newOwnerId: number,
