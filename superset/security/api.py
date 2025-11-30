@@ -360,10 +360,3 @@ class UserRegistrationsRestAPI(BaseSupersetModelRestApi):
         "registration_date",
         "registration_hash",
     ]
-
-class FilterUsersRestAPI:
-    """
-    APIs for getting non-deleted users
-    """
-    resource_name = "security/users"
-    

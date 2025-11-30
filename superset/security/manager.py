@@ -17,6 +17,7 @@
 # pylint: disable=too-many-lines
 """A set of constants and methods to manage permissions and security"""
 
+from datetime import datetime
 import logging
 import re
 import time
@@ -44,10 +45,12 @@ from flask_appbuilder.security.views import (
     ViewMenuModelView,
 )
 from flask_appbuilder.widgets import ListWidget
+from flask_appbuilder.api import expose, protect, safe
 from flask_babel import lazy_gettext as _
 from flask_login import AnonymousUserMixin, LoginManager
+
 from jwt.api_jwt import _jwt_global_obj
-from sqlalchemy import and_, inspect, or_
+from sqlalchemy import and_, inspect, or_,  Boolean, Column, DateTime
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.orm import eagerload
 from sqlalchemy.orm.mapper import Mapper
@@ -61,6 +64,7 @@ from superset.exceptions import (
     DatasetInvalidPermissionEvaluationException,
     SupersetSecurityException,
 )
+from superset.security.filters import NotDeletedUserFilter
 from superset.security.guest_token import (
     GuestToken,
     GuestTokenResources,
@@ -169,33 +173,49 @@ class SupersetUserApi(UserApi):
         Overriding this method to be able to delete items when they have constraints
         """
         item.roles = []
+    
+    #resource_name = "security/users"
 
+    base_filters = [["is_deleted", NotDeletedUserFilter, lambda: []]]
+    @expose("/soft_delete/<pk>", methods=["POST"])
+    @safe
+    @protect
+    def soft_delete(self, pk):
+        user = self.datamodel.get(pk)
+        if not user:
+            return self.response_404()
+        if getattr(user, "is_deleted", True):
+            return self.response(204)
+        user.is_deleted = True
+        user.deleted_on = datetime.utcnow()
+        self.datamodel.update(user)
+        return self.response(200)
     # Exclude soft-deleted users from list results
-    def _get_list_query(self):  # type: ignore[override]
-        """Return the base SQLAlchemy query for listing users, excluding deleted.
+    # def _get_list_query(self):  # type: ignore[override]
+    #     """Return the base SQLAlchemy query for listing users, excluding deleted.
 
-        Flask-AppBuilder's UserApi builds a base query for list endpoints.
-        We override and apply `~User.is_deleted` to ensure deleted users
-        do not appear in any listings.
-        """
-        try:
-            base_query = super()._get_list_query()  # type: ignore[attr-defined]
-        except Exception:
-            # Fallback: some FAB versions use `_get_base_query` or `get_list`.
-            base_query = super()._get_base_query()  # type: ignore[attr-defined]
+    #     Flask-AppBuilder's UserApi builds a base query for list endpoints.
+    #     We override and apply `~User.is_deleted` to ensure deleted users
+    #     do not appear in any listings.
+    #     """
+    #     try:
+    #         base_query = super()._get_list_query()  # type: ignore[attr-defined]
+    #     except Exception:
+    #         # Fallback: some FAB versions use `_get_base_query` or `get_list`.
+    #         base_query = super()._get_base_query()  # type: ignore[attr-defined]
 
-        user_model = SupersetSecurityManager.user_model
-        # Apply hard exclude; migration guarantees column exists.
-        return base_query.filter(~user_model.is_deleted)
+    #     user_model = SupersetSecurityManager.user_model
+    #     # Apply hard exclude; migration guarantees column exists.
+    #     return base_query.filter(~user_model.is_deleted)
 
-    # Compatibility for FAB variants that use `_get_base_query`
-    def _get_base_query(self):  # type: ignore[override]
-        try:
-            base_query = super()._get_base_query()  # type: ignore[attr-defined]
-            user_model = SupersetSecurityManager.user_model
-            return base_query.filter(~user_model.is_deleted)
-        except Exception:
-            return super()._get_base_query()  # type: ignore[attr-defined]
+    # # Compatibility for FAB variants that use `_get_base_query`
+    # def _get_base_query(self):  # type: ignore[override]
+    #     try:
+    #         base_query = super()._get_base_query()  # type: ignore[attr-defined]
+    #         user_model = SupersetSecurityManager.user_model
+    #         return base_query.filter(~user_model.is_deleted)
+    #     except Exception:
+    #         return super()._get_base_query()  # type: ignore[attr-defined]
 
 
 PermissionViewModelView.list_widget = SupersetSecurityListWidget
@@ -280,6 +300,20 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
     role_api = SupersetRoleApi
     user_api = SupersetUserApi
 
+    # @property
+    # def user_model(self):
+    #     from superset.models.user import SupersetUser
+    #     return SupersetUser
+    # @property
+    # def user_model(self):
+    #     # Define a runtime subclass with the soft-delete columns
+    #     class SupersetUser(User):
+    #         __tablename__ = "ab_user"
+    #         is_deleted = Column(Boolean, default=False, nullable=False)
+    #         deleted_on = Column(DateTime(timezone=True))
+        
+    #     return SupersetUser
+    
     USER_MODEL_VIEWS = {
         "RegisterUserModelView",
         "UserDBModelView",

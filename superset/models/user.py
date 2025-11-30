@@ -1,11 +1,13 @@
-# from flask_appbuilder import User as FABUser
-# from sqlalchemy import (
-#     Boolean,
-#     Column,
-# )
+from flask_appbuilder.security.sqla.models import User
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+)
 
-# class User(FABUser):
-#     __tablename__ = "ab_user"
+class SupersetUser(User):
+    __tablename__ = "ab_user"
 
-#     deleted = Column(Boolean, default=False, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
+    deleted_on = Column(DateTime(timezone=True))
 
