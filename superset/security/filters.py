@@ -3,7 +3,6 @@ from typing import Any
 from flask_babel import lazy_gettext as _
 
 from flask_appbuilder.models.filters import BaseFilter
-from sqlalchemy import text
 
 class NotDeletedUserFilter(BaseFilter):
     #Filter out deleted users when getting all users

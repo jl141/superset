@@ -40,14 +40,3 @@ class UserDAO(BaseDAO[User]):
             attrs = UserAttribute(avatar_url=url, user_id=user.id)
             user.extra_attributes = [attrs]
             db.session.add(attrs)
-
-    @staticmethod
-    def set_deleted(user: User) -> None:
-        if user.extra_attributes:
-            user.extra_attributes[0].deleted = True
-        else:
-            attrs = UserAttribute(deleted = True, user_id = user.id)
-            user.extra_attributes = [attrs]
-            db.session.add(attrs)
-        user.active = False
-        db.session.commit()

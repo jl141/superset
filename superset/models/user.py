@@ -9,5 +9,5 @@ class SupersetUser(User):
     __tablename__ = "ab_user"
 
     is_deleted = Column(Boolean, default=False, nullable=False)
-    deleted_on = Column(DateTime(timezone=True))
+    deleted_on = Column(DateTime)
 

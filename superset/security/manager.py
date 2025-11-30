@@ -177,19 +177,40 @@ class SupersetUserApi(UserApi):
     #resource_name = "security/users"
 
     base_filters = [["is_deleted", NotDeletedUserFilter, lambda: []]]
+    
     @expose("/soft_delete/<pk>", methods=["POST"])
     @safe
-    @protect
     def soft_delete(self, pk):
-        user = self.datamodel.get(pk)
+        from superset.models.user import SupersetUser  # local import to avoid circular dependency
+        from superset import db
+
+        user = db.session.get(SupersetUser, pk)
         if not user:
             return self.response_404()
-        if getattr(user, "is_deleted", True):
+        if user.is_deleted:
             return self.response(204)
+
         user.is_deleted = True
         user.deleted_on = datetime.utcnow()
-        self.datamodel.update(user)
+        db.session.commit()
+
         return self.response(200)
+
+    # @expose("/soft_delete/<pk>", methods=["POST"])
+    # @safe
+    # #@protect
+    # def soft_delete(self, pk):
+    #     user = self.datamodel.get(pk)
+    #     if not user:
+    #         return self.response_404()
+    #     if getattr(user, "is_deleted", False):
+    #         return self.response(204)
+        
+    #     user.is_deleted = True
+    #     user.deleted_on = datetime.utcnow()
+    #     self.datamodel.session.commit()
+
+    #     return self.response(200)
     # Exclude soft-deleted users from list results
     # def _get_list_query(self):  # type: ignore[override]
     #     """Return the base SQLAlchemy query for listing users, excluding deleted.
