@@ -191,6 +191,7 @@ class SupersetUserApi(UserApi):
             return self.response(204)
 
         user.is_deleted = True
+        user.active = False
         user.deleted_on = datetime.utcnow()
         db.session.commit()
 
