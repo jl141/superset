@@ -14,17 +14,20 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""add on delete cascade or set null for ab_user.id references
+"""add on delete cascade or set null for ab_user.id references, add soft deletion columns
 
-Revision ID: 5d5866f4c88a
-Revises: c233f5365c9e
-Create Date: 2025-11-30 08:38:38.140661
+Revision ID: e5bfcf4738aa
+Revises: a9c01ec10479
+Create Date: 2025-11-30 15:50:47.378421
 
 """
 
 # revision identifiers, used by Alembic.
-revision = '5d5866f4c88a'
-down_revision = 'c233f5365c9e'
+revision = 'e5bfcf4738aa'
+down_revision = 'a9c01ec10479'
+
+import sqlalchemy as sa
+from alembic import op
 
 from superset.migrations.shared.constraints import ForeignKey, redefine_exact
 
@@ -89,14 +92,47 @@ set_null_fks = [
 ]
 
 def upgrade():
+    # Redefine constraints
     for foreign_key in cascade_fks:
         redefine_exact(foreign_key, on_delete="CASCADE")
     for foreign_key in set_null_fks:
         redefine_exact(foreign_key, on_delete="SET NULL")
+        
+    # Add columns with server defaults for safe backfill during migration
+    with op.batch_alter_table("ab_user") as batch_op:
+        batch_op.add_column(
+            sa.Column(
+                "is_deleted",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.text("false"),
+            )
+        )
+        batch_op.add_column(
+            sa.Column(
+                "deleted_on",
+                sa.DateTime(timezone=True),
+                nullable=True,
+            )
+        )
 
+    # Index to accelerate filtering by is_deleted
+    op.create_index(
+        "idx_ab_user_is_deleted",
+        "ab_user",
+        ["is_deleted"],
+        unique=False,
+    )
 
 def downgrade():
+    # Redefine constraints
     for foreign_key in cascade_fks:
         redefine_exact(foreign_key)
     for foreign_key in set_null_fks:
         redefine_exact(foreign_key)
+
+    # Drop index and columns
+    op.drop_index("idx_ab_user_is_deleted", table_name="ab_user")
+    with op.batch_alter_table("ab_user") as batch_op:
+        batch_op.drop_column("deleted_on")
+        batch_op.drop_column("is_deleted")
