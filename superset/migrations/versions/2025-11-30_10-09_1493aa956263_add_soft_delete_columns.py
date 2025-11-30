@@ -14,23 +14,21 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Add is_deleted and deleted_on to ab_user
+"""add soft delete columns
 
-Revision ID: b1a2c3d4e5f6
-Revises: ec54aca4c8a2
-Create Date: 2025-11-29 12:00:00.000000
+Revision ID: 1493aa956263
+Revises: a9c01ec10479
+Create Date: 2025-11-30 10:09:33.671802
 
 """
 
 # revision identifiers, used by Alembic.
-revision = "b1a2c3d4e5f6"
-down_revision = "a9c01ec10479"
-branch_labels = None
-depends_on = None
+revision = '1493aa956263'
+down_revision = 'a9c01ec10479'
 
-from alembic import op  # noqa: E402
-import sqlalchemy as sa  # noqa: E402
-
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 def upgrade():
     # Add columns with server defaults for safe backfill during migration
@@ -40,7 +38,7 @@ def upgrade():
                 "is_deleted",
                 sa.Boolean(),
                 nullable=False,
-                server_default=sa.false(),
+                server_default=sa.text("false"),
             )
         )
         batch_op.add_column(
@@ -50,9 +48,6 @@ def upgrade():
                 nullable=True,
             )
         )
-
-    # Remove server default so future inserts rely on application defaults
-    op.execute("ALTER TABLE ab_user ALTER COLUMN is_deleted DROP DEFAULT")
 
     # Index to accelerate filtering by is_deleted
     op.create_index(
@@ -69,3 +64,4 @@ def downgrade():
     with op.batch_alter_table("ab_user") as batch_op:
         batch_op.drop_column("deleted_on")
         batch_op.drop_column("is_deleted")
+
