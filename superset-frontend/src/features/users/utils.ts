@@ -20,12 +20,6 @@ import { SupersetClient, t } from '@superset-ui/core';
 import { SelectOption } from 'src/components/ListView';
 import { FormValues } from './types';
 
-export const softDeleteUser = async (user_Id: number) => {
-  await SupersetClient.post({
-    endpoint: `/api/v1/users/soft_delete/${user_Id}`
-  })
-}
-
 export const createUser = async (values: FormValues) => {
   const { confirmPassword, ...payload } = values;
   if (payload.active == null) {
@@ -66,6 +60,11 @@ export const reassignUserAssets = async (
   });
 };
 
+export const softDeleteUser = async (user_Id: number) => {
+  await SupersetClient.post({
+    endpoint: `/api/v1/users/soft_delete/${user_Id}`
+  })
+}
 export const atLeastOneRoleOrGroup =
   (fieldToCheck: 'roles' | 'groups') =>
   ({

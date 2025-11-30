@@ -191,7 +191,7 @@ function UsersList({ user }: UsersListProps) {
 
     try {
       if (softDelete) {
-        ;
+        await softDeleteUser(user.id);
       } else {
         await deleteUser(user.id);
       }
