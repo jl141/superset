@@ -16,7 +16,7 @@
 # under the License.
 
 from flask_appbuilder import Model
-from sqlalchemy import Column, ForeignKey, Integer, String, Boolean
+from sqlalchemy import Column, ForeignKey, Integer, String, Boolean, text
 from sqlalchemy.orm import relationship
 
 from superset import security_manager
@@ -42,4 +42,4 @@ class UserAttribute(Model, AuditMixinNullable):
     welcome_dashboard_id = Column(Integer, ForeignKey("dashboards.id"))
     welcome_dashboard = relationship("Dashboard")
     avatar_url = Column(String(100))
-    deleted = Column(Boolean)
+    deleted = Column(Boolean, default=False, nullable=False, server_default=text('false'))

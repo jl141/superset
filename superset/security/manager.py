@@ -22,9 +22,9 @@ import re
 import time
 from collections import defaultdict
 from typing import Any, Callable, cast, NamedTuple, Optional, TYPE_CHECKING
-
 from flask import current_app, Flask, g, Request
 from flask_appbuilder import Model
+from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.security.sqla.apis import RoleApi, UserApi
 from flask_appbuilder.security.sqla.manager import SecurityManager
 from flask_appbuilder.security.sqla.models import (
@@ -60,7 +60,10 @@ from superset.exceptions import (
     DatasetInvalidPermissionEvaluationException,
     SupersetSecurityException,
 )
-from superset.security.filters import NotDeletedUserFilter
+#from .filters import NotDeletedUserFilter
+#from superset.models.user_attributes import UserAttribute
+#from ..views.base import BaseFilter
+
 from superset.security.guest_token import (
     GuestToken,
     GuestTokenResources,
@@ -103,7 +106,18 @@ def get_conf() -> Any:
 
 DATABASE_PERM_REGEX = re.compile(r"^\[.+\]\.\(id\:(?P<id>\d+)\)$")
 
+# class NotDeletedUserFilter(BaseFilter):
+#     #from superset.models.user_attributes import UserAttribute
+    
+#     #Filter out deleted users when getting all users
+#     name = "Filter non-deleted users"
 
+#     def apply(self, query, value):
+#         query.join(
+#             UserAttribute, 
+#             UserAttribute.user_id == self.model.id
+#             ).filter(UserAttribute.deleted.is_(False))
+        
 class DatabaseCatalogSchema(NamedTuple):
     database: str
     catalog: Optional[str]
@@ -170,9 +184,64 @@ class SupersetUserApi(UserApi):
         """
         item.roles = []
 
-    #querying securiy/users returns nondeleted users
-    base_filters = [["deleted", NotDeletedUserFilter, lambda: []]]
+    datamodel = SQLAInterface(User)
 
+
+#     def get_list_headless(self, *args, **kwargs):
+#         session = self.datamodel.session
+#         from superset.models.user_attributes import UserAttribute
+
+#         query = (
+#             session.query(User)
+#             .outerjoin(User.extra_attributes)  # join the relationship
+#             .filter(or_(
+#                 UserAttribute.deleted.is_(False),
+#                 UserAttribute.deleted.is_(None)
+#             ))
+# )
+
+#         items = query.all()
+#         count = query.count()
+
+#         return items, count
+    
+
+    def get_list(self, *args, **kwargs):
+        """
+        Override the default get_list to filter out deleted users.
+        This will automatically be called by get_list_headless.
+    
+        """
+        items, count = super().get_list(*args, **kwargs)
+
+        # filter out users that have deleted=True in user_attributes
+        filtered_query = [
+            user for user in items
+            if not (user.extra_attributes and user.extra_attributes[0].deleted)
+        ]
+        items = filtered_query
+        count = len(filtered_query)
+
+        return items, count
+
+    
+    # def query(self):
+    #     from superset.models.user_attributes import UserAttribute
+    #     return (super().query()
+    #         .join(UserAttribute)
+    #         .filter(UserAttribute.deleted == True)
+    #     )
+
+    # deferred import inside the class for circular import safety
+    # @staticmethod
+    # def get_base_filters():
+    #     from superset.security.filters import NotDeletedUserFilter
+    #     return [["deleted", NotDeletedUserFilter, lambda: []]]
+
+    # #querying securiy/users returns nondeleted users
+
+   # base_filters = [["deleted", NotDeletedUserFilter, lambda: []]]
+    #base_filters = [["deleted", "superset.security.filters.NotDeletedUserFilter", lambda: []]]
 
 PermissionViewModelView.list_widget = SupersetSecurityListWidget
 PermissionModelView.list_widget = SupersetSecurityListWidget

@@ -15,10 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 from datetime import datetime
+from inspect import ismethod
 from typing import Any, Dict
 
 from flask import current_app as app, g, redirect, request, Response
-from flask_appbuilder.api import expose, safe
+from flask_appbuilder.api import expose, safe, protect
 from flask_appbuilder.security.sqla.models import User
 from flask_jwt_extended.exceptions import NoAuthorizationError
 from marshmallow import ValidationError
@@ -179,6 +180,7 @@ class UserRestApi(BaseSupersetApi):
     resource_name = "user"
     openapi_spec_tag = "User"
     openapi_spec_component_schemas = (UserResponseSchema,)
+    class_permission_name = "User"
 
     @expose("/<int:user_id>/avatar.png", methods=("GET",))
     @safe
@@ -238,3 +240,15 @@ class UserRestApi(BaseSupersetApi):
 
         # No avatar found, return a "no-content" response
         return Response(status=204)
+    
+    @expose("/<int:user_id>/soft_delete", methods=["POST"])
+    #@protect()
+    @safe
+    def soft_delete(self, user_id: int):
+        user = UserDAO.find_by_id(user_id)
+        if not user:
+            return self.response_404()
+        if user.extra_attributes and user.extra_attributes[0] == True:
+            return self.response(400, message="DELETING ALREADY DELETED USER")
+        UserDAO.set_deleted(user)
+        return self.response(200, message="User marked as deleted")

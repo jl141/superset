@@ -45,6 +45,7 @@ import {
   deleteUser,
   getUserAssets,
   reassignUserAssets,
+  softDeleteUser,
 } from 'src/features/users/utils';
 import { fetchPaginatedData } from 'src/utils/fetchOptions';
 import type { UsersListProps, Group, Role, UserObject } from './types';
@@ -164,7 +165,8 @@ function UsersList({ user }: UsersListProps) {
         open: true,
         userToDelete: { id, username } as UserObject,
       });
-      await deleteUser(id);
+      await softDeleteUser(id);
+      //await deleteUser(id);
       refreshData();
       setUserCurrentlyDeleting(null);
       addSuccessToast(t('Deleted user: %s', username));
